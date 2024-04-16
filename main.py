@@ -1,64 +1,73 @@
 import streamlit as st
-import numpy as np
-import pandas as pd
 
-# Loading Data from a CSV File
-data = pd.DataFrame(data=pd.read_csv('trainingdata (1).csv'))
+class CandidateElimination:
+    def __init__(self, num_attributes):
+        self.S = [set() for _ in range(num_attributes)]  # most specific hypothesis
+        self.G = [set() for _ in range(num_attributes)]  # most general hypothesis
+        self.num_attributes = num_attributes
 
-# Separating concept features from Target
-concepts = np.array(data.iloc[:,0:-1])
+    def fit(self, data):
+        for instance in data:
+            target = instance[-1]  # Assuming the last attribute is the target
 
-# Isolating target into a separate DataFrame
-target = np.array(data.iloc[:,-1])
+            if target == "yes":  # Positive example
+                self.specialize(instance[:-1])
+            else:  # Negative example
+                self.generalize(instance[:-1])
 
-def learn(concepts, target):
-    
-    '''
-    learn() function implements the learning method of the Candidate elimination algorithm.
-    Arguments:
-        concepts - a data frame with all the features
-        target - a data frame with corresponding output values
-    '''
+    def specialize(self, instance):
+        for i in range(len(instance)):
+            if instance[i] not in self.S[i]:
+                self.S[i].add(instance[i])
 
-    # Initialise S0 with the first instance from concepts
-    specific_h = concepts[0].copy()
+            # Remove more general hypotheses inconsistent with the example
+            remove_indices = []
+            for j in range(len(self.G[i])):
+                if self.G[i].pop() not in instance:
+                    remove_indices.append(j)
+            for index in remove_indices:
+                if index < len(self.G[i]):  # Check if index is still within bounds
+                    self.G[i].pop(index)
 
-    general_h = [["?" for i in range(len(specific_h))] for i in range(len(specific_h))]
+    def generalize(self, instance):
+        for i in range(len(instance)):
+            # Remove more specific hypotheses inconsistent with the example
+            remove_indices = []
+            for j in range(len(self.S[i])):
+                if self.S[i].pop() != instance[i]:
+                    remove_indices.append(j)
+            for index in remove_indices:
+                if index < len(self.S[i]):  # Check if index is still within bounds
+                    self.S[i].pop(index)
 
-    # The learning iterations
-    for i, h in enumerate(concepts):
+            if instance[i] not in self.G[i]:
+                self.G[i].add(instance[i])
 
-        # Checking if the hypothesis has a positive target
-        if target[i] == "Yes":
-            for x in range(len(specific_h)):
-                # Change values in S & G only if values change
-                if h[x] != specific_h[x]:
-                    specific_h[x] = '?'
-                    general_h[x][x] = '?'
+    def get_hypotheses(self):
+        return self.S, self.G
 
-        # Checking if the hypothesis has a negative target
-        if target[i] == "No":
-            for x in range(len(specific_h)):
-                # For negative hypothesis, change values only in G
-                if h[x] != specific_h[x]:
-                    general_h[x][x] = specific_h[x]
-                else:
-                    general_h[x][x] = '?'
+def main():
+    st.title("Candidate Elimination Algorithm")
 
-    # find indices where we have empty rows, meaning those that are unchanged
-    indices = [i for i, val in enumerate(general_h) if val == ['?', '?', '?', '?', '?', '?']]
-    for i in indices:
-        # remove those rows from general_h
-        general_h.remove(['?', '?', '?', '?', '?', '?'])
-    # Return final values
-    return specific_h, general_h
+    # Example dataset
+    data = [
+        ['sunny', 'warm', 'normal', 'strong', 'warm', 'same', 'yes'],
+        ['sunny', 'warm', 'high', 'strong', 'warm', 'same', 'yes'],
+        ['rainy', 'cold', 'high', 'strong', 'warm', 'change', 'no'],
+        ['sunny', 'warm', 'high', 'strong', 'cool', 'change', 'yes']
+    ]
 
-# Call the function to learn
-s_final, g_final = learn(concepts, target)
+    ce = CandidateElimination(num_attributes=len(data[0])-1)
+    ce.fit(data)
+    S, G = ce.get_hypotheses()
 
-# Print the results using st.write()
-st.write("Final Specific_h:")
-st.write(s_final)
+    st.subheader("Final Specific Hypothesis:")
+    for hypothesis in S:
+        st.write(hypothesis)
 
-st.write("Final General_h:")
-st.write(g_final)
+    st.subheader("Final General Hypothesis:")
+    for hypothesis in G:
+        st.write(hypothesis)
+
+if __name__ == "__main__":
+    main()
